@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Escenario FPS con Three.js</title>
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    body { margin: 0; overflow: hidden; }
+    canvas { display: block; }
+
+    #loading {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      color: white;
+      font-family: Arial, sans-serif;
+      background: rgba(0,0,0,0.7);
+      padding: 20px;
+      border-radius: 10px;
+    }
+
+    #controls {
+      position: absolute;
+      bottom: 20px;
+      left: 20px;
+      color: white;
+      font-family: Arial, sans-serif;
+      background: rgba(0,0,0,0.5);
+      padding: 10px;
+      border-radius: 5px;
+      user-select: none;
+    }
+
+    #crosshair {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 20px;
+      height: 20px;
+      pointer-events: none;
+    }
+
+    #crosshair::before,
+    #crosshair::after {
+      content: '';
+      position: absolute;
+      background: white;
+    }
+
+    #crosshair::before {
+      width: 2px;
+      height: 20px;
+      left: 9px;
+      top: 0;
+    }
+
+    #crosshair::after {
+      width: 20px;
+      height: 2px;
+      left: 0;
+      top: 9px;
+    }
+
+    #hud {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      color: white;
+      font-size: 20px;
+      z-index: 100;
+      font-family: Arial, sans-serif;
+    }
+
+    #winMessage {
+      display: none;
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 48px;
+      color: white;
+      background: rgba(0, 128, 0, 0.8);
+      padding: 20px 40px;
+      border-radius: 20px;
+      z-index: 9999;
+      font-family: sans-serif;
+      box-shadow: 0 0 20px black;
+    }
+  </style>
+</head>
+<body>
+  <div id="loading">Cargando escenario...</div>
+
+  <div id="controls">
+    Controles: WASD para mover, ratón para mirar, ESPACIO para saltar, SHIFT para correr, clic derecho para para golperar.
+  </div>
+
+  <div id="crosshair"></div>
+
+  <div id="winMessage">¡Has ganado!</div>
+
+  <!-- Librerías Three.js y dependencias -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/examples/js/controls/PointerLockControls.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/examples/js/loaders/GLTFLoader.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/examples/js/loaders/FBXLoader.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/examples/js/animation/AnimationMixer.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/fflate/umd/index.min.js"></script>
+
+  <!-- Script del juego -->
+  <script src="./js/game.js"></script>
+
+  <!-- Fallback si falla la hoja de estilos -->
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      const links = document.getElementsByTagName('link');
+      for (let link of links) {
+        if (link.rel === 'stylesheet') {
+          link.onerror = function() {
+            console.error('Error al cargar la hoja de estilos:', link.href);
+            const fallbackStyle = document.createElement('style');
+            fallbackStyle.textContent = `
+              body { margin: 0; overflow: hidden; background-color: #222; }
+              canvas { display: block; }
+            `;
+            document.head.appendChild(fallbackStyle);
+          };
+        }
+      }
+    });
+  </script>
+</body>
+</html>
