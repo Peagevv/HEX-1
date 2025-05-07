@@ -114,7 +114,7 @@ function init() {
     // Cargar modelo del escenario
     const loader = new THREE.GLTFLoader();
     loader.load(
-        './models/free_low_poly_game_assets.glb',
+        'models/free_low_poly_game_assets.glb',
         (gltf) => {
             modeloEscenario = gltf.scene;
             modeloEscenario.position.set(8, -8, 0);
@@ -243,7 +243,7 @@ function loadVillainModel() {
     const fbxLoader = new THREE.FBXLoader();
 
     fbxLoader.load(
-        './models/amy/Walking.fbx',
+        'models/amy/Walking.fbx',
         (fbx) => {
             villainModel = fbx;
             villainModel.scale.set(0.01, 0.01, 0.01);
@@ -273,13 +273,13 @@ function loadVillainModel() {
 function loadVillainAnimations() {
     const fbxLoader = new THREE.FBXLoader();
     const animationFiles = [
-        { name: VILLAIN_STATES.WALKING, file: './models/amy/Walking.fbx' },
-        { name: VILLAIN_STATES.PUNCHING_BAG, file: './models/amy/Punching Bag.fbx' },
-        { name: VILLAIN_STATES.FAST_RUN, file: './models/amy/Fast Run.fbx' },
-        { name: VILLAIN_STATES.BRUTAL_ASSASSINATION, file: './models/amy/Brutal Assassination.fbx' },
-        { name: VILLAIN_STATES.EXCITED, file: './models/amy/Excited.fbx' },
-        { name: VILLAIN_STATES.RECEIVE_HIT, file: './models/amy/receive uppercut to the face.fbx' },
-        { name: VILLAIN_STATES.TAUNT, file: './models/amy/taunt.fbx' }
+        { name: VILLAIN_STATES.WALKING, file: 'models/amy/Walking.fbx' },
+        { name: VILLAIN_STATES.PUNCHING_BAG, file: 'models/amy/Punching Bag.fbx' },
+        { name: VILLAIN_STATES.FAST_RUN, file: 'models/amy/Fast Run.fbx' },
+        { name: VILLAIN_STATES.BRUTAL_ASSASSINATION, file: 'models/amy/Brutal Assassination.fbx' },
+        { name: VILLAIN_STATES.EXCITED, file: 'models/amy/Excited.fbx' },
+        { name: VILLAIN_STATES.RECEIVE_HIT, file: 'models/amy/receive uppercut to the face.fbx' },
+        { name: VILLAIN_STATES.TAUNT, file: 'models/amy/taunt.fbx' }
 
 
     ];
