@@ -1,13 +1,22 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Escenario FPS con Three.js</title>
-  <link rel="stylesheet" href="styles.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Amy fight</title>
   <style>
-    body { margin: 0; overflow: hidden; }
-    canvas { display: block; }
+    body {
+      margin: 0;
+      overflow: hidden;
+      font-family: Arial, sans-serif;
+      background-color: #000;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
 
     #loading {
       position: absolute;
@@ -15,10 +24,10 @@
       left: 50%;
       transform: translate(-50%, -50%);
       color: white;
-      font-family: Arial, sans-serif;
       background: rgba(0,0,0,0.7);
       padding: 20px;
       border-radius: 10px;
+      z-index: 1000;
     }
 
     #controls {
@@ -26,11 +35,11 @@
       bottom: 20px;
       left: 20px;
       color: white;
-      font-family: Arial, sans-serif;
       background: rgba(0,0,0,0.5);
       padding: 10px;
       border-radius: 5px;
       user-select: none;
+      z-index: 100;
     }
 
     #crosshair {
@@ -41,6 +50,7 @@
       width: 20px;
       height: 20px;
       pointer-events: none;
+      z-index: 50;
     }
 
     #crosshair::before,
@@ -64,16 +74,6 @@
       top: 9px;
     }
 
-    #hud {
-      position: absolute;
-      top: 10px;
-      left: 10px;
-      color: white;
-      font-size: 20px;
-      z-index: 100;
-      font-family: Arial, sans-serif;
-    }
-
     #winMessage {
       display: none;
       position: fixed;
@@ -86,23 +86,98 @@
       padding: 20px 40px;
       border-radius: 20px;
       z-index: 9999;
-      font-family: sans-serif;
       box-shadow: 0 0 20px black;
+    }
+
+    /* Barras de salud */
+    .health-container {
+      position: fixed;
+      top: 20px;
+      left: 20px;
+      width: 300px;
+      z-index: 100;
+    }
+
+    .health-bar {
+      margin-bottom: 15px;
+      display: flex;
+      align-items: center;
+      background: rgba(0, 0, 0, 0.5);
+      padding: 5px 10px;
+      border-radius: 5px;
+    }
+
+    .health-label {
+      width: 80px;
+      color: white;
+      font-weight: bold;
+      text-shadow: 1px 1px 2px black;
+    }
+
+    .health-bar-bg {
+      flex-grow: 1;
+      height: 20px;
+      background-color: #333;
+      border-radius: 3px;
+      overflow: hidden;
+      margin: 0 10px;
+    }
+
+    .health-bar-fill {
+      height: 100%;
+      width: 100%;
+      transition: width 0.3s ease, background-color 0.3s ease;
+    }
+
+    #playerHealthBar {
+      background-color: #00ff00;
+    }
+
+    #enemyHealthBar {
+      background-color: #ff0000;
+    }
+
+    .health-text {
+      width: 70px;
+      color: white;
+      font-weight: bold;
+      text-align: right;
+      text-shadow: 1px 1px 2px black;
     }
   </style>
 </head>
 <body>
+
+  <!-- UI -->
   <div id="loading">Cargando escenario...</div>
 
   <div id="controls">
-    Controles: WASD para mover, ratón para mirar, ESPACIO para saltar, SHIFT para correr, clic derecho para para golperar.
+    Controles: WASD para mover, ratón para mirar, ESPACIO para saltar, 
+    SHIFT para correr, clic izquierdo para disparar/golpear.
+  </div>
+
+  <!-- Contenedor de salud -->
+  <div class="health-container">
+    <div class="health-bar">
+      <div class="health-label">Jugador:</div>
+      <div class="health-bar-bg">
+        <div id="playerHealthBar" class="health-bar-fill"></div>
+      </div>
+      <div id="playerHealthText" class="health-text">100/100</div>
+    </div>
+    <div class="health-bar">
+      <div class="health-label">Enemigo:</div>
+      <div class="health-bar-bg">
+        <div id="enemyHealthBar" class="health-bar-fill"></div>
+      </div>
+      <div id="enemyHealthText" class="health-text">100/100</div>
+    </div>
   </div>
 
   <div id="crosshair"></div>
-
   <div id="winMessage">¡Has ganado!</div>
 
-  <!-- Librerías Three.js y dependencias -->
+  <!-- Scripts Three.js -->
   <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/build/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/examples/js/controls/PointerLockControls.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/examples/js/loaders/GLTFLoader.js"></script>
@@ -110,26 +185,13 @@
   <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/examples/js/animation/AnimationMixer.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/fflate/umd/index.min.js"></script>
 
-  <!-- Script del juego -->
   <script src="./js/game.js"></script>
 
-  <!-- Fallback si falla la hoja de estilos -->
   <script>
-    document.addEventListener('DOMContentLoaded', function() {
-      const links = document.getElementsByTagName('link');
-      for (let link of links) {
-        if (link.rel === 'stylesheet') {
-          link.onerror = function() {
-            console.error('Error al cargar la hoja de estilos:', link.href);
-            const fallbackStyle = document.createElement('style');
-            fallbackStyle.textContent = `
-              body { margin: 0; overflow: hidden; background-color: #222; }
-              canvas { display: block; }
-            `;
-            document.head.appendChild(fallbackStyle);
-          };
-        }
-      }
+    window.addEventListener('load', function () {
+      setTimeout(() => {
+        document.getElementById('loading').style.display = 'none';
+      }, 500);
     });
   </script>
 </body>

@@ -1,9 +1,57 @@
+// Constantes del juego
+const GAME_CONSTANTS = {
+    PLAYER: {
+        BASE_SPEED: 0.1,
+        RUN_SPEED: 0.2,
+        JUMP_FORCE: 0.11,
+        GRAVITY: 0.002,
+        JUMP_DELAY: 500,
+        HEALTH: 100,
+        HEIGHT: 0.8
+    },
+    VILLAIN: {
+        BASE_SPEED: 0.02,
+        RUN_SPEED: 0.05,
+        DETECTION_RADIUS: 8,
+        ATTACK_RADIUS: 2,
+        ATTACK_COOLDOWN: 1000,
+        HEALTH: 100,
+        DAMAGE: 10
+    },
+    ATTACK: {
+        DAMAGE: 20,
+        COOLDOWN: 2000
+    },
+    COLORS: {
+        BACKGROUND: 0x87CEEB,
+        FOG: [0x87CEEB, 10, 150],
+        HEALTH: {
+            PLAYER: {
+                HIGH: '#00ff00',
+                MEDIUM: '#ffff00',
+                LOW: '#ff0000'
+            },
+            ENEMY: {
+                HIGH: '#ff0000',
+                MEDIUM: '#cc0000',
+                LOW: '#990000'
+            }
+        }
+    }
+};
 
-// Import required Three.js components (if using modules)
-// import * as THREE from 'three';
-// import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
-// import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-// import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
+
+// Estados del villano
+const VILLAIN_STATES = {
+    WALKING: 'Walking',
+    PUNCHING_BAG: 'Punching_Bag',
+    FAST_RUN: 'Fast_Run',
+    BRUTAL_ASSASSINATION: 'Brutal_Assassination',
+    EXCITED: 'Excited',
+    RECEIVE_HIT: 'Receive_Uppercut_To_The_Face',
+
+};
+
 
 // Variables globales
 let scene, camera, renderer, controls, clock, mixer, villainMixer;
@@ -11,41 +59,19 @@ let modeloEscenario, villainModel;
 let currentVillainAction = null;
 const objetosColision = [];
 let teclas = {};
-let villainHealth = 100;
+let villainHealth = GAME_CONSTANTS.VILLAIN.HEALTH;
 let villainIsDead = false;
 let gameWon = false;
-let playerHealth = 100;
+let playerHealth = GAME_CONSTANTS.PLAYER.HEALTH;
 let playerIsDead = false;
+let lastAttackTime = 0;
 
-let villainHasTaunted = false;
-let velocidadBase = 0.1;
-let velocidadActual = velocidadBase;
-const velocidadCorrer = velocidadBase * 2;
+
+let velocidadActual = GAME_CONSTANTS.PLAYER.BASE_SPEED;
 let puedeSaltar = true;
-const gravedad = 0.002;
 let velocidadY = 0;
 let personajeEnSuelo = false;
 let tiempoUltimoSalto = 0;
-const retrasoSalto = 500; // 500ms entre saltos
-let enemyHealth = 100;
-
-const playerHealthDisplay = document.getElementById("playerHealth");
-const enemyHealthDisplay = document.getElementById("enemyHealth");
-
-function updateHealthDisplays() {
-    playerHealthDisplay.textContent = playerHealth;
-    enemyHealthDisplay.textContent = enemyHealth;
-}
-// Estados del villano
-const VILLAIN_STATES = {
-    WALKING: 'Walking',
-    PUNCHING_BAG: 'Punching Bag',
-    FAST_RUN: 'Fast Run',
-    BRUTAL_ASSASSINATION: 'Brutal Assassination',
-    EXCITED: 'Excited',
-    RECEIVE_HIT: 'Receive Uppercut To The Face',
-    TAUNT: 'Taunt'
-};
 let villainState = VILLAIN_STATES.WALKING;
 let villainAnimations = {};
 
@@ -53,12 +79,13 @@ let villainAnimations = {};
 function init() {
     // Crear escena
     scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x87CEEB);
+    scene.background = new THREE.Color(GAME_CONSTANTS.COLORS.BACKGROUND);
+    scene.fog = new THREE.Fog(...GAME_CONSTANTS.COLORS.FOG);
     clock = new THREE.Clock();
 
-    // Configurar cámara en primera persona
+    // Configurar cámara
     camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-    camera.position.y = 0.8; // Altura aproximada de una persona
+    camera.position.y = GAME_CONSTANTS.PLAYER.HEIGHT;
 
     // Configurar renderizador
     renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -70,13 +97,13 @@ function init() {
     controls = new THREE.PointerLockControls(camera, document.body);
     scene.add(controls.getObject());
 
+    // Eventos del ratón
     document.addEventListener('mousedown', (event) => {
-        if (event.button === 2 && !villainIsDead) {
+        if (event.button === 2 && !villainIsDead) { // Clic derecho
             checkAttackHit();
         }
     });
     document.addEventListener('contextmenu', event => event.preventDefault());
-
 
     // Habilitar controles al hacer clic
     document.addEventListener('click', () => {
@@ -89,20 +116,13 @@ function init() {
     controls.addEventListener('lock', () => {
         document.getElementById('crosshair').style.display = 'block';
     });
-
     controls.addEventListener('unlock', () => {
         document.getElementById('crosshair').style.display = 'none';
     });
-    scene.fog = new THREE.Fog(0x000080, 10, 100);
-    scene.background = new THREE.Color(0x00000); // Fondo también negro para mayor realismo
-
 
     // Configurar luces
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
     scene.add(ambientLight);
-
-    ;
-
 
     const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
     directionalLight.position.set(1, 1, 1);
@@ -126,15 +146,14 @@ function init() {
                     child.castShadow = true;
                     child.receiveShadow = true;
 
-                    // Agregar a objetos de colisión (excepto decoraciones)
                     if (!child.name.includes('decor') && !child.name.includes('planta')) {
                         objetosColision.push(child);
                     }
                 }
             });
 
-            // Configurar animaciones si existen
-            if (gltf.animations && gltf.animations.length) {
+            // Configurar animaciones
+            if (gltf.animations?.length) {
                 mixer = new THREE.AnimationMixer(modeloEscenario);
                 gltf.animations.forEach((clip) => {
                     mixer.clipAction(clip).play();
@@ -142,10 +161,7 @@ function init() {
             }
 
             scene.add(modeloEscenario);
-
-            // Cargar modelo del villano después de cargar el escenario
             loadVillainModel();
-
             document.getElementById('loading').style.display = 'none';
         },
         undefined,
@@ -159,48 +175,73 @@ function init() {
     document.addEventListener('keydown', (event) => {
         teclas[event.code] = true;
 
-        // Correr (Shift)
         if (event.code === 'ShiftLeft' || event.code === 'ShiftRight') {
-            velocidadActual = velocidadCorrer;
+            velocidadActual = GAME_CONSTANTS.PLAYER.RUN_SPEED;
         }
 
-        // Salto (con retraso entre saltos)
-        if (event.code === 'Space' && personajeEnSuelo && Date.now() - tiempoUltimoSalto > retrasoSalto) {
-            velocidadY = 0.11;
+        if (event.code === 'Space' && personajeEnSuelo && Date.now() - tiempoUltimoSalto > GAME_CONSTANTS.PLAYER.JUMP_DELAY) {
+            velocidadY = GAME_CONSTANTS.PLAYER.JUMP_FORCE;
             personajeEnSuelo = false;
             tiempoUltimoSalto = Date.now();
         }
-
-        // Teclas de prueba para animaciones del villano (solo para desarrollo)
-        if (event.code === 'Digit1') setVillainAnimation(VILLAIN_STATES.WALKING);
-        if (event.code === 'Digit2') setVillainAnimation(VILLAIN_STATES.PUNCHING_BAG);
-        if (event.code === 'Digit3') setVillainAnimation(VILLAIN_STATES.FAST_RUN);
-        if (event.code === 'Digit4') setVillainAnimation(VILLAIN_STATES.BRUTAL_ASSASSINATION);
-        if (event.code === 'Digit5') setVillainAnimation(VILLAIN_STATES.EXCITED);
     });
 
     document.addEventListener('keyup', (event) => {
         teclas[event.code] = false;
 
-        // Dejar de correr
         if (event.code === 'ShiftLeft' || event.code === 'ShiftRight') {
-            velocidadActual = velocidadBase;
+            velocidadActual = GAME_CONSTANTS.PLAYER.BASE_SPEED;
         }
     });
 
     // Manejar redimensionamiento
     window.addEventListener('resize', onWindowResize);
+    
+    // Inicializar salud
+    updateHealthDisplays();
 }
-// FUNCIONES PARA ACTUALIZAR INTERFAZ
+
+// Actualizar displays de salud
 function updateHealthDisplays() {
-    document.getElementById("enemy-health").textContent = enemyHealth;
-    document.getElementById("player-health").textContent = playerHealth;
+    // Jugador
+    const playerHealthPercent = (playerHealth / GAME_CONSTANTS.PLAYER.HEALTH) * 100;
+    const playerHealthBar = document.getElementById("playerHealthBar");
+    const playerHealthText = document.getElementById("playerHealthText");
+    
+    playerHealthBar.style.width = `${playerHealthPercent}%`;
+    playerHealthText.textContent = `${playerHealth}/${GAME_CONSTANTS.PLAYER.HEALTH}`;
+    
+    if (playerHealthPercent > 60) {
+        playerHealthBar.style.backgroundColor = GAME_CONSTANTS.COLORS.HEALTH.PLAYER.HIGH;
+    } else if (playerHealthPercent > 30) {
+        playerHealthBar.style.backgroundColor = GAME_CONSTANTS.COLORS.HEALTH.PLAYER.MEDIUM;
+    } else {
+        playerHealthBar.style.backgroundColor = GAME_CONSTANTS.COLORS.HEALTH.PLAYER.LOW;
+    }
+
+    // Enemigo
+    const enemyHealthPercent = (villainHealth / GAME_CONSTANTS.VILLAIN.HEALTH) * 100;
+    const enemyHealthBar = document.getElementById("enemyHealthBar");
+    const enemyHealthText = document.getElementById("enemyHealthText");
+    
+    enemyHealthBar.style.width = `${enemyHealthPercent}%`;
+    enemyHealthText.textContent = `${villainHealth}/${GAME_CONSTANTS.VILLAIN.HEALTH}`;
+    
+    if (enemyHealthPercent > 60) {
+        enemyHealthBar.style.backgroundColor = GAME_CONSTANTS.COLORS.HEALTH.ENEMY.HIGH;
+    } else if (enemyHealthPercent > 30) {
+        enemyHealthBar.style.backgroundColor = GAME_CONSTANTS.COLORS.HEALTH.ENEMY.MEDIUM;
+    } else {
+        enemyHealthBar.style.backgroundColor = GAME_CONSTANTS.COLORS.HEALTH.ENEMY.LOW;
+    }
 }
-// FUNCIONES DE GAME OVER
+
+// Game Over
 let gameEnded = false;
 function showGameOverScreen(victory) {
     if (gameEnded) return;
     gameEnded = true;
+    
     const screen = document.createElement("div");
     screen.style.position = "fixed";
     screen.style.top = "0";
@@ -209,36 +250,53 @@ function showGameOverScreen(victory) {
     screen.style.height = "100vh";
     screen.style.backgroundColor = "rgba(0, 0, 0, 0.8)";
     screen.style.display = "flex";
+    screen.style.flexDirection = "column";
     screen.style.justifyContent = "center";
     screen.style.alignItems = "center";
     screen.style.color = "white";
     screen.style.fontSize = "48px";
     screen.style.zIndex = "9999";
-    screen.textContent = victory ? "¡Has ganado!" : "¡Has muerto!";
+    
+    const message = document.createElement("div");
+    message.textContent = victory ? "¡Has ganado!" : "¡Has muerto!";
+    
+    const restartButton = document.createElement("button");
+    restartButton.textContent = "Reiniciar Juego";
+    restartButton.style.marginTop = "20px";
+    restartButton.style.padding = "10px 20px";
+    restartButton.style.fontSize = "24px";
+    restartButton.style.cursor = "pointer";
+    restartButton.addEventListener("click", () => location.reload());
+    
+    screen.appendChild(message);
+    screen.appendChild(restartButton);
     document.body.appendChild(screen);
 }
 
-// FUNCIONES DE DAÑO
+// Funciones de daño
 function damageEnemy(amount) {
-    enemyHealth -= amount;
-    if (enemyHealth < 0) enemyHealth = 0;
+    villainHealth = Math.max(0, villainHealth - amount);
     updateHealthDisplays();
-    if (enemyHealth === 0) {
-        console.log("¡Villano derrotado!");
+    
+    if (villainHealth <= 0) {
+        villainIsDead = true;
+        setVillainAnimation(VILLAIN_STATES.BRUTAL_ASSASSINATION);
         showGameOverScreen(true);
     }
 }
 
 function damagePlayer(amount) {
-    playerHealth -= amount;
-    if (playerHealth < 0) playerHealth = 0;
+    playerHealth = Math.max(0, playerHealth - amount);
     updateHealthDisplays();
-    if (playerHealth === 0) {
-        console.log("¡Has muerto!");
+    
+    if (playerHealth <= 0) {
+        playerIsDead = true;
+        setVillainAnimation(VILLAIN_STATES.EXCITED);
         showGameOverScreen(false);
     }
 }
-// Función para cargar el modelo del villano
+
+// Cargar modelo del villano
 function loadVillainModel() {
     const fbxLoader = new THREE.FBXLoader();
 
@@ -249,7 +307,6 @@ function loadVillainModel() {
             villainModel.scale.set(0.01, 0.01, 0.01);
             villainModel.position.set(5, -8, 5);
 
-            // Configurar sombras
             villainModel.traverse((child) => {
                 if (child.isMesh) {
                     child.castShadow = true;
@@ -258,8 +315,6 @@ function loadVillainModel() {
             });
 
             scene.add(villainModel);
-
-            // Cargar animaciones del villano
             loadVillainAnimations();
         },
         undefined,
@@ -269,19 +324,17 @@ function loadVillainModel() {
     );
 }
 
-// Función para cargar las animaciones del villano
+// Cargar animaciones del villano
 function loadVillainAnimations() {
     const fbxLoader = new THREE.FBXLoader();
     const animationFiles = [
         { name: VILLAIN_STATES.WALKING, file: 'models/amy/Walking.fbx' },
-        { name: VILLAIN_STATES.PUNCHING_BAG, file: 'models/amy/Punching Bag.fbx' },
-        { name: VILLAIN_STATES.FAST_RUN, file: 'models/amy/Fast Run.fbx' },
-        { name: VILLAIN_STATES.BRUTAL_ASSASSINATION, file: 'models/amy/Brutal Assassination.fbx' },
+        { name: VILLAIN_STATES.PUNCHING_BAG, file: 'models/amy/Punching_Bag.fbx' },
+        { name: VILLAIN_STATES.FAST_RUN, file: 'models/amy/Fast_Run.fbx' },
+        { name: VILLAIN_STATES.BRUTAL_ASSASSINATION, file: 'models/amy/Brutal_Assassination.fbx' },
         { name: VILLAIN_STATES.EXCITED, file: 'models/amy/Excited.fbx' },
-        { name: VILLAIN_STATES.RECEIVE_HIT, file: 'models/amy/receive uppercut to the face.fbx' },
-        { name: VILLAIN_STATES.TAUNT, file: 'models/amy/taunt.fbx' }
-
-
+        { name: VILLAIN_STATES.RECEIVE_HIT, file: 'models/amy/Receive_Uppercut_To_The_Face.fbx' },
+       
     ];
 
     let loadedCount = 0;
@@ -293,7 +346,6 @@ function loadVillainAnimations() {
                 villainAnimations[anim.name] = animation.animations[0];
                 loadedCount++;
 
-                // Cuando todas las animaciones estén cargadas
                 if (loadedCount === animationFiles.length) {
                     setupVillainAnimations();
                 }
@@ -301,32 +353,28 @@ function loadVillainAnimations() {
             undefined,
             (error) => {
                 console.error(`Error al cargar la animación ${anim.name}:`, error);
-
             }
         );
     });
 }
 
-// Configurar el sistema de animaciones del villano
+// Configurar animaciones del villano
 function setupVillainAnimations() {
     villainMixer = new THREE.AnimationMixer(villainModel);
 
-    // Crear acciones para cada animación
     for (const [name, clip] of Object.entries(villainAnimations)) {
         const action = villainMixer.clipAction(clip);
         action.name = name;
 
-        // Configurar la animación de caminar como la predeterminada
         if (name === VILLAIN_STATES.WALKING) {
             action.play();
         }
     }
 
-    // Iniciar con la animación de caminar
     setVillainAnimation(VILLAIN_STATES.WALKING);
 }
 
-// Función para cambiar la animación del villano
+// Cambiar animación del villano
 function setVillainAnimation(state) {
     if (!villainMixer || villainState === state) return;
 
@@ -368,53 +416,59 @@ function setVillainAnimation(state) {
     }
 }
 
-
-
-// Función para verificar si el jugador ha matado al villano
+// Verificar ataque al enemigo
 function checkAttackHit() {
-    if (villainIsDead) return;
+    if (villainIsDead || Date.now() - lastAttackTime < GAME_CONSTANTS.ATTACK.COOLDOWN) return;
+    
+    lastAttackTime = Date.now();
     const raycaster = new THREE.Raycaster();
-    const mouse = new THREE.Vector2(0, 0); // Centro de la pantalla
-    raycaster.setFromCamera(mouse, camera);
+    raycaster.setFromCamera(new THREE.Vector2(), camera);
 
-    const intersects = raycaster.intersectObject(villainModel, true);
-
-    if (intersects.length > 0) {
-        villainHealth -= 20;
-        console.log(`Villano golpeado. Vida restante: ${villainHealth}`);
-
-        if (villainHealth <= 0) {
-            villainIsDead = true;
-            setVillainAnimation(VILLAIN_STATES.BRUTAL_ASSASSINATION);
-            checkPlayerWin();
-        } else {
-            setVillainAnimation(VILLAIN_STATES.RECEIVE_HIT);
-            // Volver a caminar después de recibir golpe
-            setTimeout(() => {
-                if (!villainIsDead) {
-                    setVillainAnimation(VILLAIN_STATES.WALKING);
-                }
-            }, 40000); // 1 segundo de animación de recibir golpe
-        }
+    if (raycaster.intersectObject(villainModel, true).length > 0) {
+        damageEnemy(GAME_CONSTANTS.ATTACK.DAMAGE);
+        setVillainAnimation(VILLAIN_STATES.RECEIVE_HIT);
+        
+        setTimeout(() => {
+            if (!villainIsDead) {
+                setVillainAnimation(VILLAIN_STATES.WALKING);
+            }
+        }, 4000);
     }
 }
-function checkVillainDeath() {
-    if (villainIsDead && !gameWon) {
-        // Aquí podrías agregar lógica adicional o sonido
-        console.log("¡Villano eliminado!");
+
+// Comportamiento del villano
+function updateVillainBehavior(delta) {
+    if (!villainModel || villainIsDead || playerIsDead) return;
+
+    const distancia = controls.getObject().position.distanceTo(villainModel.position);
+
+    // Eliminado todo el bloque de TAUNT
+    if (distancia > 6) {
+        setVillainAnimation(VILLAIN_STATES.FAST_RUN);
+    } else if (distancia > 2) {
+        setVillainAnimation(VILLAIN_STATES.WALKING);
+    } else {
+        setVillainAnimation(VILLAIN_STATES.PUNCHING_BAG);
+        intentarAtacarJugador();
     }
 }
-// Función para verificar si el jugador ha ganado
-function checkPlayerWin() {
-    if (villainIsDead && !gameWon) {
-        const distance = controls.getObject().position.distanceTo(villainModel.position);
-        if (distance < 2) {
-            gameWon = true;
-            setVillainAnimation(VILLAIN_STATES.EXCITED);
-            alert("¡Has ganado!");
-        }
+
+// Ataque del villano
+function intentarAtacarJugador() {
+    if (villainIsDead || playerIsDead) return;
+
+    const ahora = Date.now();
+    const distancia = villainModel.position.distanceTo(controls.getObject().position);
+
+    if (distancia < GAME_CONSTANTS.VILLAIN.ATTACK_RADIUS && 
+        (ahora - lastAttackTime > GAME_CONSTANTS.VILLAIN.ATTACK_COOLDOWN)) {
+        lastAttackTime = ahora;
+        setVillainAnimation(VILLAIN_STATES.BRUTAL_ASSASSINATION);
+        damagePlayer(GAME_CONSTANTS.VILLAIN.DAMAGE);
     }
 }
+
+// Movimiento del villano
 function moverVillanoHaciaJugador(delta) {
     if (!villainModel || villainIsDead) return;
 
@@ -428,85 +482,18 @@ function moverVillanoHaciaJugador(delta) {
     if (distancia > 0.5) {
         direccion.normalize();
 
-        let velocidadVillano = 0.02;
+        let velocidadVillano = GAME_CONSTANTS.VILLAIN.BASE_SPEED;
         if (villainState === VILLAIN_STATES.FAST_RUN) {
-            velocidadVillano = 0.05; // 👈 Más rápido al correr
+            velocidadVillano = GAME_CONSTANTS.VILLAIN.RUN_SPEED;
         }
 
         direccion.multiplyScalar(velocidadVillano * delta * 60);
         villainModel.position.add(direccion);
-
         villainModel.lookAt(controls.getObject().position.clone().setY(villainModel.position.y));
     }
 }
 
-
-let tiempoUltimoAtaque = 0;
-const intervaloAtaque = 2000; // puede atacar cada 2 segundos
-
-function intentarAtacarJugador() {
-    if (villainIsDead || playerIsDead) return;
-
-    const ahora = Date.now();
-    const distancia = villainModel.position.distanceTo(controls.getObject().position);
-
-    // Inicializa el tiempo del último ataque si no existe
-    if (!intentarAtacarJugador.ultimoAtaque) {
-        intentarAtacarJugador.ultimoAtaque = 0;
-    }
-
-    // Solo ataca si ha pasado más de 1 segundo desde el último ataque
-    if (distancia < 2 && (ahora - intentarAtacarJugador.ultimoAtaque > 1000)) {
-        intentarAtacarJugador.ultimoAtaque = ahora;
-
-        // Ataca
-        setVillainAnimation(VILLAIN_STATES.BRUTAL_ASSASSINATION);
-
-        // Resta vida al jugador
-        playerHealth -= 10;
-        console.log("¡Te golpearon! Vida restante: " + playerHealth);
-
-        // Si la vida del jugador llega a 0
-        if (playerHealth <= 0) {
-            playerIsDead = true;
-            console.log("¡Has sido derrotado!");
-            setVillainAnimation(VILLAIN_STATES.EXCITED);
-            alert("¡Has perdido!");
-
-            // 🔁 Reiniciar el juego después de 3 segundos
-            setTimeout(() => {
-                location.reload();
-            }, 5000);
-        }
-    }
-}
-
-
-
-
-function onWindowResize() {
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-}
-
-// Detección de colisiones mejorada
-function verificarColisiones(posicion) {
-    const cajaPersonaje = new THREE.Box3().setFromCenterAndSize(
-        new THREE.Vector3(posicion.x, posicion.y - 0.3, posicion.z),
-        new THREE.Vector3(0.1, .8, 0.1)
-    );
-
-    for (const objeto of objetosColision) {
-        const cajaObjeto = new THREE.Box3().expandByObject(objeto);
-        if (cajaPersonaje.intersectsBox(cajaObjeto)) {
-            return true;
-        }
-    }
-    return false;
-}
-
-// Movimiento del personaje mejorado
+// Movimiento del jugador
 function moverPersonaje(delta) {
     if (!controls.isLocked) return;
 
@@ -531,10 +518,6 @@ function moverPersonaje(delta) {
     }
 
     // Movimiento horizontal
-    const nuevaPos = controls.getObject().position.clone();
-    nuevaPos.add(movimiento);
-
-    // Eje X/Z separados para colisión
     const nuevaX = controls.getObject().position.clone();
     nuevaX.x += movimiento.x;
     if (!verificarColisiones(nuevaX)) {
@@ -548,7 +531,7 @@ function moverPersonaje(delta) {
     }
 
     // Movimiento vertical (gravedad)
-    velocidadY -= gravedad * delta * 60;
+    velocidadY -= GAME_CONSTANTS.PLAYER.GRAVITY * delta * 60;
     const nuevaY = controls.getObject().position.y + velocidadY;
 
     const posYPrueba = controls.getObject().position.clone();
@@ -564,57 +547,46 @@ function moverPersonaje(delta) {
         velocidadY = 0;
     }
 }
-function updateVillainBehavior(delta) {
-    if (!villainModel || villainIsDead || playerIsDead) return;
 
-    const distancia = controls.getObject().position.distanceTo(villainModel.position);
+// Verificar colisiones
+function verificarColisiones(posicion) {
+    const cajaPersonaje = new THREE.Box3().setFromCenterAndSize(
+        new THREE.Vector3(posicion.x, posicion.y - 0.3, posicion.z),
+        new THREE.Vector3(0.1, 0.8, 0.1)
+    );
 
-    // Solo hace Taunt la primera vez que entra en rango
-    if (!villainHasTaunted && distancia < 8) {
-        villainHasTaunted = true;
-        setVillainAnimation(VILLAIN_STATES.TAUNT);
-
-        // Espera a que termine la animación antes de continuar comportamiento normal
-        setTimeout(() => {
-            if (!villainIsDead) {
-                updateVillainBehavior(delta); // Llama otra vez para retomar lógica normal
-            }
-        }, villainAnimations[VILLAIN_STATES.TAUNT].duration * 1000);
-
-        return;
+    for (const objeto of objetosColision) {
+        const cajaObjeto = new THREE.Box3().expandByObject(objeto);
+        if (cajaPersonaje.intersectsBox(cajaObjeto)) {
+            return true;
+        }
     }
-
-    // Lógica normal después del taunt
-    if (distancia > 6) {
-        setVillainAnimation(VILLAIN_STATES.FAST_RUN);
-    } else if (distancia > 2) {
-        setVillainAnimation(VILLAIN_STATES.WALKING);
-    } else {
-        setVillainAnimation(VILLAIN_STATES.PUNCHING_BAG);
-        intentarAtacarJugador();
-    }
+    return false;
 }
 
+// Redimensionamiento
+function onWindowResize() {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+}
 
-
+// Bucle de animación
 function animate() {
     requestAnimationFrame(animate);
     const delta = clock.getDelta();
+    
     moverPersonaje(delta);
     updateVillainBehavior(delta);
     moverVillanoHaciaJugador(delta);
-    intentarAtacarJugador();
+    
     if (mixer) mixer.update(delta);
     if (villainMixer) villainMixer.update(delta);
-
-    // Verificar estado del villano
-    checkVillainDeath();
-    checkPlayerWin();
-
+    
     renderer.render(scene, camera);
 }
 
-// Iniciar la aplicación
+// Iniciar juego
 window.addEventListener('load', () => {
     init();
     animate();
